@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState, useCallback } from 'react';
+import React, { useRef, useEffect, useState } from 'react';
 import Webcam from 'react-webcam';
 import QrScanner from 'qr-scanner';
 import { BoundingBox } from '../props/types';
@@ -12,49 +12,43 @@ const QRScannerComponent = () => {
   const [tiltZ, setTiltZ] = useState(0);
   const [boundingBox, setBoundingBox] = useState<BoundingBox | null>(null);
 
-  const capture = useCallback(async () => {
-    if (!webcamRef.current) return;
-    const imageSrc = webcamRef.current.getScreenshot();
-
-    if (imageSrc) {
-      try {
-        const result = await QrScanner.scanImage(imageSrc, {
-          returnDetailedScanResult: true,
-        });
-        setQrResult(result);
-        if (result.cornerPoints) {
-          const { x, y, z } = calculateTiltAngles(result.cornerPoints);
-          setTiltX(x);
-          setTiltY(y);
-          setTiltZ(z);
-          const xMin = Math.min(...result.cornerPoints.map((p) => p.x));
-          const yMin = Math.min(...result.cornerPoints.map((p) => p.y));
-          const xMax = Math.max(...result.cornerPoints.map((p) => p.x));
-          const yMax = Math.max(...result.cornerPoints.map((p) => p.y));
-
-          setBoundingBox({
-            left: xMin,
-            top: yMin,
-            width: xMax - xMin,
-            height: yMax - yMin,
-          });
-        }
-      } catch (error) {
-        console.error(error);
-        setBoundingBox(null);
-        setQrResult(null);
-      }
-    }
-  }, []);
-
   useEffect(() => {
-    const interval = setInterval(capture, 5);
-    return () => clearInterval(interval);
-  }, [capture]);
+    if (!webcamRef.current) return;
+    const imageSrc = webcamRef.current.video;
+    if (imageSrc) {
+      const qrScanner = new QrScanner(
+        imageSrc,
+        (result) => {
+          if (result.cornerPoints) {
+            const { x, y, z } = calculateTiltAngles(result.cornerPoints);
+            setTiltX(x);
+            setTiltY(y);
+            setTiltZ(z);
+            const xMin = Math.min(...result.cornerPoints.map((p) => p.x));
+            const yMin = Math.min(...result.cornerPoints.map((p) => p.y));
+            const xMax = Math.max(...result.cornerPoints.map((p) => p.x));
+            const yMax = Math.max(...result.cornerPoints.map((p) => p.y));
+
+            setBoundingBox({
+              left: xMin,
+              top: yMin,
+              width: xMax - xMin,
+              height: yMax - yMin,
+            });
+          }
+          setQrResult(result);
+        },
+        {
+          maxScansPerSecond: 25,
+        }
+      );
+      qrScanner.start();
+    }
+  }, [webcamRef.current?.video]);
 
   return (
-    <div style={{ position: 'relative' }}>
-      <Webcam ref={webcamRef} screenshotFormat='image/png' mirrored />
+    <div style={{ position: 'relative', scale: 2 }}>
+      <Webcam ref={webcamRef} screenshotFormat='image/png' />
       {boundingBox && (
         <div
           style={{
